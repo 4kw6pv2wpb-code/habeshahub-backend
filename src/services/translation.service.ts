@@ -9,7 +9,17 @@ import { env } from '../config/env';
 import { redis } from '../config/redis';
 import { logger } from '../utils/logger';
 
-const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+let _openai: OpenAI | null = null;
+
+function getOpenAI(): OpenAI | null {
+  if (_openai) return _openai;
+  const key = env.OPENAI_API_KEY;
+  if (!key || key === 'your-openai-api-key' || key.startsWith('sk-placeholder')) {
+    return null;
+  }
+  _openai = new OpenAI({ apiKey: key });
+  return _openai;
+}
 
 const LANGUAGE_NAMES: Record<string, string> = {
   EN: 'English',
@@ -53,7 +63,13 @@ export const translationService = {
     const fromLang = LANGUAGE_NAMES[from] ?? from;
     const toLang = LANGUAGE_NAMES[to] ?? to;
 
-    const completion = await openai.chat.completions.create({
+    const client = getOpenAI();
+    if (!client) {
+      logger.warn('OpenAI not configured — returning original text');
+      return { original: text, translated: text, from, to, cached: false };
+    }
+
+    const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.3,
       max_tokens: 2000,
@@ -121,7 +137,13 @@ export const translationService = {
    * Auto-detect language of input text.
    */
   async detectLanguage(text: string): Promise<string> {
-    const completion = await openai.chat.completions.create({
+    const client = getOpenAI();
+    if (!client) {
+      logger.warn('OpenAI not configured — defaulting to EN');
+      return 'EN';
+    }
+
+    const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0,
       max_tokens: 10,
