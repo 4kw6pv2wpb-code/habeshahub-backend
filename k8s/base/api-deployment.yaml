@@ -1,0 +1,141 @@
+# ─────────────────────────────────────────────
+# HabeshaHub API Deployment
+# ─────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: habeshahub-api
+  namespace: habeshahub
+  labels:
+    app: habeshahub-api
+    tier: backend
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: habeshahub-api
+  template:
+    metadata:
+      labels:
+        app: habeshahub-api
+        tier: backend
+    spec:
+      serviceAccountName: habeshahub-api
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api
+          image: ghcr.io/habeshahub/api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: habeshahub-config
+            - secretRef:
+                name: habeshahub-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: habeshahub-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: habeshahub-api
+  namespace: habeshahub
+  labels:
+    app: habeshahub-api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  selector:
+    app: habeshahub-api
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: habeshahub-api
+  namespace: habeshahub
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: habeshahub-api
+  namespace: habeshahub
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: habeshahub-api
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
