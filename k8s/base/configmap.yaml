@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────
+# Non-sensitive configuration
+# ─────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: habeshahub-config
+  namespace: habeshahub
+data:
+  NODE_ENV: production
+  PORT: "3000"
+  JWT_EXPIRES_IN: "24h"
+  MEILISEARCH_HOST: http://meilisearch:7700
+  CORS_ORIGINS: "https://habeshahub.com,https://app.habeshahub.com"
+  RATE_LIMIT_POINTS: "200"
+  RATE_LIMIT_DURATION: "86400"
+  NATS_URL: nats://nats:4222
+  NATS_ENABLED: "true"
+  S3_BUCKET: habeshahub-media
+  S3_REGION: us-west-2
+  CDN_BASE_URL: https://cdn.habeshahub.com
+  APNS_BUNDLE_ID: com.habeshahub.app
+---
+# ─────────────────────────────────────────────
+# Sensitive configuration (encrypted in production)
+# ─────────────────────────────────────────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: habeshahub-secrets
+  namespace: habeshahub
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://habeshahub:CHANGE_ME@postgres-primary:5432/habeshahub_db"
+  REDIS_URL: "redis://redis-master:6379"
+  JWT_SECRET: "CHANGE_ME_TO_A_SECURE_SECRET_AT_LEAST_32_CHARS"
+  OPENAI_API_KEY: ""
+  MEILISEARCH_KEY: "CHANGE_ME"
+  S3_ACCESS_KEY: ""
+  S3_SECRET_KEY: ""
+  FCM_PROJECT_ID: ""
+  FCM_SERVER_KEY: ""
+  APNS_KEY_ID: ""
+  APNS_TEAM_ID: ""
+  CLICKHOUSE_URL: ""
+  POSTHOG_API_KEY: ""
