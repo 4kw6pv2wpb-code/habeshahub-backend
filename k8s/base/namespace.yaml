@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: habeshahub
+  labels:
+    app.kubernetes.io/name: habeshahub
+    app.kubernetes.io/part-of: habeshahub-platform
