@@ -12,7 +12,15 @@ import { env } from '../config/env';
 import { redis } from '../config/redis';
 import { logger } from '../utils/logger';
 
-const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+let _openai: OpenAI | null = null;
+
+function getOpenAI(): OpenAI | null {
+  if (_openai) return _openai;
+  const key = env.OPENAI_API_KEY;
+  if (!key || key === 'your-openai-api-key' || key.startsWith('sk-placeholder')) return null;
+  _openai = new OpenAI({ apiKey: key });
+  return _openai;
+}
 
 const CACHE_TTL = 60 * 60 * 24 * 7; // 7 days for immigration FAQs
 
@@ -76,7 +84,13 @@ export const immigrationService = {
       ? `\nContext: Currently in ${query.context.currentCountry ?? 'unknown'}, targeting ${query.context.targetCountry ?? 'unknown'}, nationality: ${query.context.nationality ?? 'Ethiopian/Eritrean'}, visa type of interest: ${query.context.visaType ?? 'not specified'}`
       : '';
 
-    const completion = await openai.chat.completions.create({
+    const client = getOpenAI();
+    if (!client) {
+      logger.warn('OpenAI not configured — immigration AI features disabled');
+      return { answer: 'AI features require OpenAI configuration.', disclaimer: true } as any;
+    }
+
+    const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.3,
       max_tokens: 2000,
@@ -134,7 +148,13 @@ Respond in JSON:
 
     if (cached) return JSON.parse(cached);
 
-    const completion = await openai.chat.completions.create({
+    const client = getOpenAI();
+    if (!client) {
+      logger.warn('OpenAI not configured — immigration AI features disabled');
+      return { answer: 'AI features require OpenAI configuration.', disclaimer: true } as any;
+    }
+
+    const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.2,
       max_tokens: 1500,
@@ -185,7 +205,13 @@ Respond in JSON:
     registrationDeadline: string | null;
     resources: { title: string; url: string }[];
   }> {
-    const completion = await openai.chat.completions.create({
+    const client = getOpenAI();
+    if (!client) {
+      logger.warn('OpenAI not configured — immigration AI features disabled');
+      return { answer: 'AI features require OpenAI configuration.', disclaimer: true } as any;
+    }
+
+    const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.2,
       max_tokens: 800,
