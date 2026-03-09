@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────
+# MeiliSearch (full-text search)
+# ─────────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: meilisearch
+  namespace: habeshahub
+  labels:
+    app: meilisearch
+    tier: search
+spec:
+  serviceName: meilisearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: meilisearch
+  template:
+    metadata:
+      labels:
+        app: meilisearch
+        tier: search
+    spec:
+      containers:
+        - name: meilisearch
+          image: getmeili/meilisearch:v1.6
+          env:
+            - name: MEILI_ENV
+              value: production
+            - name: MEILI_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: habeshahub-secrets
+                  key: MEILISEARCH_KEY
+            - name: MEILI_DB_PATH
+              value: /meili_data
+          ports:
+            - containerPort: 7700
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          volumeMounts:
+            - name: meili-storage
+              mountPath: /meili_data
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 7700
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 7700
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: meili-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meilisearch
+  namespace: habeshahub
+spec:
+  type: ClusterIP
+  ports:
+    - port: 7700
+      targetPort: 7700
+  selector:
+    app: meilisearch
