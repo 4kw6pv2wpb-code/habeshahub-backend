@@ -1,0 +1,1295 @@
+// HabeshaHub - Prisma Schema
+// PostgreSQL provider with full relational model
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum Language {
+  EN
+  AM
+  TI
+  SO
+}
+
+enum RemittanceStatus {
+  CREATED
+  IN_FLIGHT
+  PAID
+  FAILED
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  GIG
+  CONTRACT
+}
+
+enum ContentStatus {
+  ACTIVE
+  FLAGGED
+  REMOVED
+}
+
+enum SwipeDirection {
+  LEFT
+  RIGHT
+}
+
+enum DatingGoal {
+  SERIOUS
+  CASUAL
+  FRIENDSHIP
+  NETWORKING
+}
+
+// ─────────────────────────────────────────────
+// User Model
+// ─────────────────────────────────────────────
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String     @unique
+  phone        String?    @unique
+  name         String
+  bio          String?
+  avatarUrl    String?
+  city         String?
+  country      String?
+  passwordHash String
+  role         Role       @default(USER)
+  languages    Language[]
+  isVerified   Boolean    @default(false)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations
+  posts         Post[]
+  jobs          Job[]
+  applications  Application[]
+  stories       Story[]
+  sentMessages  Message[]        @relation("SentMessages")
+  threads       Thread[]         @relation("ThreadParticipants")
+  events        Event[]          @relation("EventOrganizer")
+  eventRSVPs    Event[]          @relation("EventAttendees")
+  remittances   Remittance[]
+  comments      Comment[]
+  likes         Like[]
+  notifications Notification[]
+  datingProfile DatingProfile?
+  swipesMade    Swipe[]         @relation("SwipesFrom")
+  swipesReceived Swipe[]        @relation("SwipesTo")
+  matchesA      Match[]         @relation("MatchUserA")
+  matchesB      Match[]         @relation("MatchUserB")
+  housingListings HousingListing[] @relation("HousingListings")
+  roommateProfile RoommateProfile?
+  housingInquiries HousingInquiry[] @relation("HousingInquiries")
+  savedListings   SavedListing[]   @relation("SavedListings")
+
+  // Phase 2 relations
+  videos          Video[]          @relation("UserVideos")
+  videoComments   VideoComment[]   @relation("UserVideoComments")
+  videoLikes      VideoLike[]      @relation("UserVideoLikes")
+  creatorProfile  CreatorProfile?  @relation("UserCreatorProfile")
+  diasporaWallet  DiasporaWallet?  @relation("UserWallet")
+  equbsOrganized  EqubGroup[]      @relation("EqubOrganizer")
+  equbMemberships EqubMembership[] @relation("EqubMember")
+  equbPayouts     EqubPayout[]     @relation("EqubPayoutRecipient")
+  poolsOrganized  InvestmentPool[] @relation("PoolOrganizer")
+  investments     InvestmentParticipant[] @relation("InvestmentParticipants")
+  loansAsked      MicroLoan[]      @relation("LoanBorrower")
+  referralsMade   Referral[]       @relation("Referrals")
+  referredBy      Referral[]       @relation("ReferredBy")
+  rewardPoints    RewardPoints[]   @relation("UserRewards")
+  ambassador      Ambassador?      @relation("UserAmbassador")
+  storyViews      StoryView[]      @relation("StoryViews")
+  storyReactions  StoryReaction[]  @relation("StoryReactions")
+  liveStreams     LiveStream[]     @relation("UserStreams")
+  giftsSent       StreamGift[]     @relation("GiftsSent")
+  reportsMade     UserReport[]     @relation("ReportsMade")
+  reportsReceived UserReport[]     @relation("ReportsReceived")
+  modActions      ModerationLog[]  @relation("ModActions")
+  modTargets      ModerationLog[]  @relation("ModTargets")
+
+  @@index([email])
+  @@index([city])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// Post Model
+// ─────────────────────────────────────────────
+
+model Post {
+  id           String        @id @default(uuid()) @db.Uuid
+  authorId     String        @db.Uuid
+  content      String
+  mediaUrl     String?
+  mediaType    String?       // image, video
+  likesCount   Int           @default(0)
+  commentsCount Int          @default(0)
+  status       ContentStatus @default(ACTIVE)
+  moderationScore Float?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relations
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  likes    Like[]
+
+  @@index([authorId])
+  @@index([createdAt(sort: Desc)])
+  @@map("posts")
+}
+
+// ─────────────────────────────────────────────
+// Job Model
+// ─────────────────────────────────────────────
+
+model Job {
+  id          String   @id @default(uuid()) @db.Uuid
+  posterId    String   @db.Uuid
+  title       String
+  description String
+  skills      String[]
+  payMin      Int?
+  payMax      Int?
+  city        String?
+  country     String?
+  remote      Boolean  @default(false)
+  jobType     JobType  @default(FULL_TIME)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  poster       User          @relation(fields: [posterId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@index([posterId])
+  @@index([city])
+  @@index([createdAt(sort: Desc)])
+  @@map("jobs")
+}
+
+// ─────────────────────────────────────────────
+// Application Model
+// ─────────────────────────────────────────────
+
+model Application {
+  id          String   @id @default(uuid()) @db.Uuid
+  jobId       String   @db.Uuid
+  applicantId String   @db.Uuid
+  coverLetter String?
+  resumeUrl   String?
+  matchScore  Float?   // AI-computed match score
+  status      String   @default("pending") // pending, reviewed, accepted, rejected
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  job       Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicant User @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, applicantId])
+  @@index([jobId])
+  @@index([applicantId])
+  @@map("applications")
+}
+
+// ─────────────────────────────────────────────
+// Story Model
+// ─────────────────────────────────────────────
+
+model Story {
+  id         String        @id @default(uuid()) @db.Uuid
+  authorId   String        @db.Uuid
+  mediaUrl   String
+  mediaType  String        @default("image") // image, video
+  caption    String?
+  viewCount  Int           @default(0)
+  status     ContentStatus @default(ACTIVE)
+  expiresAt  DateTime
+  createdAt  DateTime      @default(now())
+
+  // Relations
+  author    User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  views     StoryView[]
+  reactions StoryReaction[]
+
+  @@index([authorId])
+  @@index([expiresAt])
+  @@map("stories")
+}
+
+// ─────────────────────────────────────────────
+// Thread Model (conversation container)
+// ─────────────────────────────────────────────
+
+model Thread {
+  id           String   @id @default(uuid()) @db.Uuid
+  isGroup      Boolean  @default(false)
+  groupName    String?
+  groupAvatar  String?
+  lastMessageAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  participants User[]    @relation("ThreadParticipants")
+  messages     Message[]
+  matches      Match[]
+
+  @@index([lastMessageAt(sort: Desc)])
+  @@map("threads")
+}
+
+// ─────────────────────────────────────────────
+// Message Model
+// ─────────────────────────────────────────────
+
+model Message {
+  id              String        @id @default(uuid()) @db.Uuid
+  threadId        String        @db.Uuid
+  senderId        String        @db.Uuid
+  text            String?
+  mediaUrl        String?
+  mediaType       String?
+  status          ContentStatus @default(ACTIVE)
+  moderationScore Float?
+  isRead          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+
+  // Relations
+  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender User   @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt(sort: Desc)])
+  @@index([senderId])
+  @@map("messages")
+}
+
+// ─────────────────────────────────────────────
+// Event Model
+// ─────────────────────────────────────────────
+
+model Event {
+  id          String   @id @default(uuid()) @db.Uuid
+  organizerId String   @db.Uuid
+  title       String
+  description String?
+  location    String?
+  city        String?
+  country     String?
+  isOnline    Boolean  @default(false)
+  meetingUrl  String?
+  date        DateTime
+  endDate     DateTime?
+  coverUrl    String?
+  maxAttendees Int?
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  organizer User   @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  attendees User[] @relation("EventAttendees")
+
+  @@index([organizerId])
+  @@index([date])
+  @@index([city])
+  @@map("events")
+}
+
+// ─────────────────────────────────────────────
+// Remittance Model
+// ─────────────────────────────────────────────
+
+model Remittance {
+  id                String           @id @default(uuid()) @db.Uuid
+  userId            String           @db.Uuid
+  amount            Float
+  currency          String           @default("USD")
+  corridor          String           // e.g. US-ET, EU-ET, US-ER
+  feeAmount         Float
+  exchangeRate      Float
+  recipientAmount   Float
+  recipientCurrency String           @default("ETB")
+  recipientName     String
+  recipientPhone    String?
+  recipientBank     String?
+  status            RemittanceStatus @default(CREATED)
+  providerRef       String?          // External provider transaction ID
+  paidAt            DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("remittances")
+}
+
+// ─────────────────────────────────────────────
+// Comment Model
+// ─────────────────────────────────────────────
+
+model Comment {
+  id              String        @id @default(uuid()) @db.Uuid
+  postId          String        @db.Uuid
+  authorId        String        @db.Uuid
+  content         String
+  status          ContentStatus @default(ACTIVE)
+  moderationScore Float?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([authorId])
+  @@map("comments")
+}
+
+// ─────────────────────────────────────────────
+// Like Model
+// ─────────────────────────────────────────────
+
+model Like {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@map("likes")
+}
+
+// ─────────────────────────────────────────────
+// Dating Profile Model
+// ─────────────────────────────────────────────
+
+model DatingProfile {
+  id           String      @id @default(uuid()) @db.Uuid
+  userId       String      @unique @db.Uuid
+  headline     String?
+  aboutMe      String?
+  interests    String[]
+  ageMin       Int         @default(18)
+  ageMax       Int         @default(50)
+  goal         DatingGoal  @default(SERIOUS)
+  birthDate    DateTime?
+  height       Int?        // cm
+  education    String?
+  occupation   String?
+  photoUrls    String[]
+  maxDistance  Int         @default(50) // km
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("dating_profiles")
+}
+
+// ─────────────────────────────────────────────
+// Swipe Model
+// ─────────────────────────────────────────────
+
+model Swipe {
+  id          String         @id @default(uuid()) @db.Uuid
+  swiperId    String         @db.Uuid
+  targetId    String         @db.Uuid
+  direction   SwipeDirection
+  createdAt   DateTime       @default(now())
+
+  // Relations
+  swiper User @relation("SwipesFrom", fields: [swiperId], references: [id], onDelete: Cascade)
+  target User @relation("SwipesTo", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([swiperId, targetId])
+  @@index([swiperId])
+  @@index([targetId])
+  @@map("swipes")
+}
+
+// ─────────────────────────────────────────────
+// Match Model
+// ─────────────────────────────────────────────
+
+model Match {
+  id        String   @id @default(uuid()) @db.Uuid
+  userAId   String   @db.Uuid
+  userBId   String   @db.Uuid
+  threadId  String?  @db.Uuid  // Auto-created DM thread
+  createdAt DateTime @default(now())
+
+  // Relations
+  userA  User    @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB  User    @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  thread Thread? @relation(fields: [threadId], references: [id])
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+  @@map("matches")
+}
+
+// ─────────────────────────────────────────────
+// Housing Enums
+// ─────────────────────────────────────────────
+
+enum ListingType {
+  ROOM
+  APARTMENT
+  HOUSE
+  SUBLET
+  SHARED
+}
+
+enum FurnishingStatus {
+  FURNISHED
+  UNFURNISHED
+  PARTIALLY_FURNISHED
+}
+
+enum HousingStatus {
+  ACTIVE
+  RENTED
+  EXPIRED
+  WITHDRAWN
+}
+
+enum RoommateGender {
+  MALE
+  FEMALE
+  ANY
+}
+
+enum LeaseType {
+  MONTH_TO_MONTH
+  SHORT_TERM
+  LONG_TERM
+  FLEXIBLE
+}
+
+// ─────────────────────────────────────────────
+// Housing Listing Model
+// ─────────────────────────────────────────────
+
+model HousingListing {
+  id              String           @id @default(uuid()) @db.Uuid
+  posterId        String           @db.Uuid
+  title           String
+  description     String
+  listingType     ListingType      @default(ROOM)
+  rent            Int              // Monthly rent in USD
+  deposit         Int?             // Security deposit
+  city            String
+  neighborhood    String?
+  address         String?          // Optional — exact address
+  latitude        Float?
+  longitude       Float?
+  bedrooms        Int              @default(1)
+  bathrooms       Int              @default(1)
+  sqft            Int?
+  furnishing      FurnishingStatus @default(UNFURNISHED)
+  leaseType       LeaseType        @default(FLEXIBLE)
+  availableDate   DateTime
+  photoUrls       String[]
+  amenities       String[]         // wifi, parking, laundry, etc.
+  utilitiesIncluded Boolean        @default(false)
+  petsAllowed     Boolean          @default(false)
+  smokingAllowed  Boolean          @default(false)
+  preferredLanguages Language[]
+  status          HousingStatus    @default(ACTIVE)
+  viewCount       Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  poster     User              @relation("HousingListings", fields: [posterId], references: [id], onDelete: Cascade)
+  inquiries  HousingInquiry[]
+  savedBy    SavedListing[]
+
+  @@index([posterId])
+  @@index([city])
+  @@index([listingType])
+  @@index([rent])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("housing_listings")
+}
+
+// ─────────────────────────────────────────────
+// Roommate Profile Model
+// ─────────────────────────────────────────────
+
+model RoommateProfile {
+  id              String           @id @default(uuid()) @db.Uuid
+  userId          String           @unique @db.Uuid
+  headline        String?
+  aboutMe         String?
+  budgetMin       Int              // min monthly budget
+  budgetMax       Int              // max monthly budget
+  preferredCity   String?
+  preferredNeighborhoods String[]
+  moveInDate      DateTime?
+  genderPreference RoommateGender  @default(ANY)
+  ageMin          Int              @default(18)
+  ageMax          Int              @default(60)
+  occupation      String?
+  lifestyle       String[]         // early_bird, night_owl, quiet, social, student, professional
+  languages       Language[]
+  cleanlinessLevel Int             @default(3) // 1-5 scale
+  smokingOk       Boolean          @default(false)
+  petsOk          Boolean          @default(false)
+  photoUrls       String[]
+  isActive        Boolean          @default(true)
+  matchScore      Float?           // Computed compatibility score cache
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([preferredCity])
+  @@index([budgetMin, budgetMax])
+  @@index([isActive])
+  @@map("roommate_profiles")
+}
+
+// ─────────────────────────────────────────────
+// Housing Inquiry Model
+// ─────────────────────────────────────────────
+
+model HousingInquiry {
+  id          String   @id @default(uuid()) @db.Uuid
+  listingId   String   @db.Uuid
+  senderId    String   @db.Uuid
+  message     String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  listing HousingListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  sender  User           @relation("HousingInquiries", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+  @@index([senderId])
+  @@map("housing_inquiries")
+}
+
+// ─────────────────────────────────────────────
+// Saved Listing Model
+// ─────────────────────────────────────────────
+
+model SavedListing {
+  id        String   @id @default(uuid()) @db.Uuid
+  listingId String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  // Relations
+  listing HousingListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user    User           @relation("SavedListings", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, userId])
+  @@index([userId])
+  @@map("saved_listings")
+}
+
+// ─────────────────────────────────────────────
+// Notification Model
+// ─────────────────────────────────────────────
+
+model Notification {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  type       String   // like, comment, message, job_match, event, system
+  title      String
+  body       String
+  data       Json?    // Arbitrary extra data (postId, senderId, etc.)
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ═══════════════════════════════════════════════
+// PHASE 2 — Platform Expansion Models
+// ═══════════════════════════════════════════════
+
+// ─────────────────────────────────────────────
+// Phase 2 Enums
+// ─────────────────────────────────────────────
+
+enum VideoStatus {
+  PROCESSING
+  READY
+  FAILED
+  REMOVED
+}
+
+enum TransactionType {
+  TIP
+  SUBSCRIPTION
+  GIFT
+  WITHDRAWAL
+  DEPOSIT
+  EQUB_CONTRIBUTION
+  EQUB_PAYOUT
+  INVESTMENT
+  LOAN_DISBURSEMENT
+  LOAN_REPAYMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum EqubCycleStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum LoanStatus {
+  REQUESTED
+  APPROVED
+  DISBURSED
+  REPAYING
+  PAID_OFF
+  DEFAULTED
+}
+
+enum ModerationAction {
+  WARNING
+  MUTE
+  SUSPEND
+  BAN
+  CONTENT_REMOVAL
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  HATE_SPEECH
+  MISINFORMATION
+  FRAUD
+  INAPPROPRIATE
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum RewardAction {
+  SIGN_UP
+  REFERRAL
+  FIRST_POST
+  DAILY_LOGIN
+  PROFILE_COMPLETE
+  FIRST_REMITTANCE
+  COMMUNITY_CONTRIBUTION
+  AMBASSADOR_BONUS
+}
+
+enum StreamStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+// ─────────────────────────────────────────────
+// Video Model (Short-form video platform)
+// ─────────────────────────────────────────────
+
+model Video {
+  id             String       @id @default(uuid()) @db.Uuid
+  authorId       String       @db.Uuid
+  title          String?
+  description    String?
+  originalUrl    String       // Raw uploaded file
+  hlsUrl         String?      // HLS playlist after transcoding
+  thumbnailUrl   String?
+  duration       Int?         // seconds
+  width          Int?
+  height         Int?
+  fileSize       Int?         // bytes
+  mimeType       String       @default("video/mp4")
+  status         VideoStatus  @default(PROCESSING)
+  likesCount     Int          @default(0)
+  commentsCount  Int          @default(0)
+  sharesCount    Int          @default(0)
+  viewCount      Int          @default(0)
+  watchTimeTotal Int          @default(0) // cumulative seconds watched
+  contentStatus  ContentStatus @default(ACTIVE)
+  moderationScore Float?
+  hashtags       String[]
+  language       Language?    // detected or user-set
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  author        User           @relation("UserVideos", fields: [authorId], references: [id], onDelete: Cascade)
+  videoComments VideoComment[]
+  videoLikes    VideoLike[]
+
+  @@index([authorId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@index([viewCount(sort: Desc)])
+  @@map("videos")
+}
+
+model VideoComment {
+  id        String        @id @default(uuid()) @db.Uuid
+  videoId   String        @db.Uuid
+  authorId  String        @db.Uuid
+  content   String
+  status    ContentStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+
+  video  Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  author User  @relation("UserVideoComments", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([videoId, createdAt(sort: Desc)])
+  @@map("video_comments")
+}
+
+model VideoLike {
+  id        String   @id @default(uuid()) @db.Uuid
+  videoId   String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  user  User  @relation("UserVideoLikes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, userId])
+  @@map("video_likes")
+}
+
+// ─────────────────────────────────────────────
+// Creator Economy Models
+// ─────────────────────────────────────────────
+
+model CreatorProfile {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  displayName    String?
+  bio            String?
+  bannerUrl      String?
+  category       String?  // music, comedy, education, culture, food, etc.
+  isMonetized    Boolean  @default(false)
+  subscriberCount Int     @default(0)
+  totalRevenue   Float    @default(0)
+  monthlyRevenue Float    @default(0)
+  tipEnabled     Boolean  @default(true)
+  subscriptionPrice Float? // Monthly subscription price in USD
+  badgeLevel     String?  // bronze, silver, gold, diamond
+  verifiedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user      User             @relation("UserCreatorProfile", fields: [userId], references: [id], onDelete: Cascade)
+  wallet    CreatorWallet?
+  revenues  CreatorRevenue[]
+  analytics CreatorAnalytics[]
+
+  @@index([userId])
+  @@index([category])
+  @@index([subscriberCount(sort: Desc)])
+  @@map("creator_profiles")
+}
+
+model CreatorWallet {
+  id             String  @id @default(uuid()) @db.Uuid
+  creatorId      String  @unique @db.Uuid
+  balance        Float   @default(0)
+  pendingBalance Float   @default(0)
+  totalEarned    Float   @default(0)
+  totalWithdrawn Float   @default(0)
+  currency       String  @default("USD")
+  stripeAccountId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  creator      CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("creator_wallets")
+}
+
+model CreatorRevenue {
+  id         String          @id @default(uuid()) @db.Uuid
+  creatorId  String          @db.Uuid
+  type       TransactionType
+  amount     Float
+  currency   String          @default("USD")
+  fromUserId String?         @db.Uuid
+  metadata   Json?
+  status     TransactionStatus @default(COMPLETED)
+  createdAt  DateTime        @default(now())
+
+  creator CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([createdAt(sort: Desc)])
+  @@map("creator_revenues")
+}
+
+model CreatorAnalytics {
+  id           String   @id @default(uuid()) @db.Uuid
+  creatorId    String   @db.Uuid
+  date         DateTime @db.Date
+  views        Int      @default(0)
+  likes        Int      @default(0)
+  comments     Int      @default(0)
+  shares       Int      @default(0)
+  newFollowers Int      @default(0)
+  revenue      Float    @default(0)
+  watchTime    Int      @default(0) // total seconds
+
+  creator CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, date])
+  @@index([creatorId, date(sort: Desc)])
+  @@map("creator_analytics")
+}
+
+// ─────────────────────────────────────────────
+// Diaspora Finance Models
+// ─────────────────────────────────────────────
+
+model DiasporaWallet {
+  id             String  @id @default(uuid()) @db.Uuid
+  userId         String  @unique @db.Uuid
+  balance        Float   @default(0)
+  currency       String  @default("USD")
+  isActive       Boolean @default(true)
+  kycVerified    Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User                @relation("UserWallet", fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+  equbMemberships EqubMembership[]
+  investments  InvestmentParticipant[]
+  loans        MicroLoan[]
+
+  @@map("diaspora_wallets")
+}
+
+model WalletTransaction {
+  id               String            @id @default(uuid()) @db.Uuid
+  walletId         String            @db.Uuid
+  creatorWalletId  String?           @db.Uuid
+  type             TransactionType
+  amount           Float
+  currency         String            @default("USD")
+  status           TransactionStatus @default(PENDING)
+  description      String?
+  referenceId      String?           // External reference
+  metadata         Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  wallet        DiasporaWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  creatorWallet CreatorWallet? @relation(fields: [creatorWalletId], references: [id])
+
+  @@index([walletId, createdAt(sort: Desc)])
+  @@index([type])
+  @@map("wallet_transactions")
+}
+
+// Equb (Ethiopian/Eritrean rotating savings circle)
+model EqubGroup {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizerId    String          @db.Uuid
+  name           String
+  description    String?
+  contributionAmount Float       // Amount per cycle per member
+  currency       String          @default("USD")
+  cycleFrequency String          @default("monthly") // weekly, biweekly, monthly
+  maxMembers     Int
+  currentCycle   Int             @default(0)
+  totalCycles    Int             // = maxMembers (each member gets payout once)
+  status         EqubCycleStatus @default(ACTIVE)
+  nextPayoutDate DateTime?
+  startDate      DateTime
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organizer   User             @relation("EqubOrganizer", fields: [organizerId], references: [id])
+  memberships EqubMembership[]
+  payouts     EqubPayout[]
+
+  @@index([organizerId])
+  @@index([status])
+  @@map("equb_groups")
+}
+
+model EqubMembership {
+  id        String   @id @default(uuid()) @db.Uuid
+  equbId    String   @db.Uuid
+  walletId  String   @db.Uuid
+  userId    String   @db.Uuid
+  position  Int      // Payout position (1 = first to receive)
+  isPaidOut Boolean  @default(false)
+  joinedAt  DateTime @default(now())
+
+  equb   EqubGroup      @relation(fields: [equbId], references: [id], onDelete: Cascade)
+  wallet DiasporaWallet @relation(fields: [walletId], references: [id])
+  user   User           @relation("EqubMember", fields: [userId], references: [id])
+
+  @@unique([equbId, userId])
+  @@map("equb_memberships")
+}
+
+model EqubPayout {
+  id          String   @id @default(uuid()) @db.Uuid
+  equbId      String   @db.Uuid
+  recipientId String   @db.Uuid
+  cycle       Int
+  amount      Float
+  paidAt      DateTime @default(now())
+
+  equb      EqubGroup @relation(fields: [equbId], references: [id], onDelete: Cascade)
+  recipient User      @relation("EqubPayoutRecipient", fields: [recipientId], references: [id])
+
+  @@index([equbId])
+  @@map("equb_payouts")
+}
+
+// Community Investment Pools
+model InvestmentPool {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizerId    String   @db.Uuid
+  name           String
+  description    String?
+  goalAmount     Float
+  currentAmount  Float    @default(0)
+  currency       String   @default("USD")
+  category       String?  // real_estate, business, education, community
+  minInvestment  Float    @default(50)
+  maxInvestors   Int      @default(100)
+  returnRate     Float?   // Expected annual return %
+  maturityDate   DateTime?
+  isClosed       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organizer    User                    @relation("PoolOrganizer", fields: [organizerId], references: [id])
+  participants InvestmentParticipant[]
+
+  @@index([organizerId])
+  @@index([category])
+  @@map("investment_pools")
+}
+
+model InvestmentParticipant {
+  id         String   @id @default(uuid()) @db.Uuid
+  poolId     String   @db.Uuid
+  walletId   String   @db.Uuid
+  userId     String   @db.Uuid
+  amount     Float
+  sharePercent Float  // % of total pool
+  investedAt DateTime @default(now())
+
+  pool   InvestmentPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  wallet DiasporaWallet @relation(fields: [walletId], references: [id])
+  user   User           @relation("InvestmentParticipants", fields: [userId], references: [id])
+
+  @@unique([poolId, userId])
+  @@map("investment_participants")
+}
+
+// Micro Loans
+model MicroLoan {
+  id             String     @id @default(uuid()) @db.Uuid
+  borrowerWalletId String   @db.Uuid
+  borrowerId     String     @db.Uuid
+  amount         Float
+  currency       String     @default("USD")
+  interestRate   Float      @default(0) // 0 for community interest-free loans
+  termMonths     Int
+  monthlyPayment Float
+  amountRepaid   Float      @default(0)
+  status         LoanStatus @default(REQUESTED)
+  purpose        String?
+  approvedBy     String?    @db.Uuid
+  disbursedAt    DateTime?
+  dueDate        DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  borrowerWallet DiasporaWallet @relation(fields: [borrowerWalletId], references: [id])
+  borrower       User           @relation("LoanBorrower", fields: [borrowerId], references: [id])
+
+  @@index([borrowerId])
+  @@index([status])
+  @@map("micro_loans")
+}
+
+// ─────────────────────────────────────────────
+// Growth Engine Models
+// ─────────────────────────────────────────────
+
+model Referral {
+  id           String   @id @default(uuid()) @db.Uuid
+  referrerId   String   @db.Uuid
+  referredId   String   @db.Uuid
+  code         String   @unique
+  pointsEarned Int      @default(0)
+  isConverted  Boolean  @default(false)
+  convertedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  referrer User @relation("Referrals", fields: [referrerId], references: [id])
+  referred User @relation("ReferredBy", fields: [referredId], references: [id])
+
+  @@index([referrerId])
+  @@index([code])
+  @@map("referrals")
+}
+
+model RewardPoints {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @db.Uuid
+  action    RewardAction
+  points    Int
+  metadata  Json?
+  createdAt DateTime     @default(now())
+
+  user User @relation("UserRewards", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("reward_points")
+}
+
+model Ambassador {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  tier           String   @default("bronze") // bronze, silver, gold, platinum
+  totalReferrals Int      @default(0)
+  totalPoints    Int      @default(0)
+  isActive       Boolean  @default(true)
+  city           String?
+  region         String?
+  joinedAt       DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation("UserAmbassador", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ambassadors")
+}
+
+// ─────────────────────────────────────────────
+// Stories Feature (24h ephemeral)
+// ─────────────────────────────────────────────
+
+model StoryView {
+  id        String   @id @default(uuid()) @db.Uuid
+  storyId   String   @db.Uuid
+  viewerId  String   @db.Uuid
+  viewedAt  DateTime @default(now())
+
+  story  Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  viewer User  @relation("StoryViews", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, viewerId])
+  @@map("story_views")
+}
+
+model StoryReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  storyId   String   @db.Uuid
+  userId    String   @db.Uuid
+  emoji     String   // 🔥❤️😂👏🙏
+  createdAt DateTime @default(now())
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  user  User  @relation("StoryReactions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, userId])
+  @@map("story_reactions")
+}
+
+// ─────────────────────────────────────────────
+// Live Streaming
+// ─────────────────────────────────────────────
+
+model LiveStream {
+  id           String       @id @default(uuid()) @db.Uuid
+  hostId       String       @db.Uuid
+  title        String
+  description  String?
+  thumbnailUrl String?
+  streamKey    String       @unique
+  rtmpUrl      String?
+  hlsUrl       String?
+  status       StreamStatus @default(SCHEDULED)
+  viewerCount  Int          @default(0)
+  peakViewers  Int          @default(0)
+  giftsTotal   Float        @default(0)
+  scheduledAt  DateTime?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  createdAt    DateTime     @default(now())
+
+  host  User         @relation("UserStreams", fields: [hostId], references: [id], onDelete: Cascade)
+  gifts StreamGift[]
+
+  @@index([hostId])
+  @@index([status])
+  @@map("live_streams")
+}
+
+model StreamGift {
+  id        String   @id @default(uuid()) @db.Uuid
+  streamId  String   @db.Uuid
+  senderId  String   @db.Uuid
+  giftType  String   // coffee, injera, gold_jebena, etc.
+  amount    Float    // USD value
+  message   String?
+  createdAt DateTime @default(now())
+
+  stream LiveStream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  sender User       @relation("GiftsSent", fields: [senderId], references: [id])
+
+  @@index([streamId])
+  @@map("stream_gifts")
+}
+
+// ─────────────────────────────────────────────
+// Trust & Moderation System
+// ─────────────────────────────────────────────
+
+model UserReport {
+  id           String       @id @default(uuid()) @db.Uuid
+  reporterId   String       @db.Uuid
+  reportedId   String       @db.Uuid
+  reason       ReportReason
+  description  String?
+  contentType  String?      // post, comment, message, video, profile
+  contentId    String?      @db.Uuid
+  status       ReportStatus @default(PENDING)
+  resolvedBy   String?      @db.Uuid
+  resolvedAt   DateTime?
+  resolution   String?
+  createdAt    DateTime     @default(now())
+
+  reporter User @relation("ReportsMade", fields: [reporterId], references: [id])
+  reported User @relation("ReportsReceived", fields: [reportedId], references: [id])
+
+  @@index([reportedId])
+  @@index([status])
+  @@map("user_reports")
+}
+
+model ModerationLog {
+  id          String           @id @default(uuid()) @db.Uuid
+  moderatorId String           @db.Uuid
+  targetId    String           @db.Uuid
+  action      ModerationAction
+  reason      String?
+  contentType String?
+  contentId   String?          @db.Uuid
+  duration    Int?             // Duration in hours (for mute/suspend)
+  expiresAt   DateTime?
+  createdAt   DateTime         @default(now())
+
+  moderator User @relation("ModActions", fields: [moderatorId], references: [id])
+  target    User @relation("ModTargets", fields: [targetId], references: [id])
+
+  @@index([targetId])
+  @@index([moderatorId])
+  @@map("moderation_logs")
+}
+
+// ─────────────────────────────────────────────
+// Event Bus / Activity Log
+// ─────────────────────────────────────────────
+
+model PlatformEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  type      String   // post_created, video_uploaded, job_posted, user_joined, etc.
+  actorId   String?  @db.Uuid
+  entityType String? // post, video, job, user, etc.
+  entityId  String?  @db.Uuid
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([actorId])
+  @@index([createdAt(sort: Desc)])
+  @@map("platform_events")
+}
+
+// ─────────────────────────────────────────────
+// Engagement Tracking (for feed ranking)
+// ─────────────────────────────────────────────
+
+model EngagementEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  contentType String  // post, video, job, event, housing
+  contentId  String   @db.Uuid
+  action     String   // view, like, comment, share, save, click, watch
+  value      Float?   // e.g. watch time in seconds
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([contentId, action])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([contentType, createdAt(sort: Desc)])
+  @@map("engagement_events")
+}
