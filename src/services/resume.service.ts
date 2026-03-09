@@ -9,7 +9,15 @@ import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
-const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+let _openai: OpenAI | null = null;
+
+function getOpenAI(): OpenAI | null {
+  if (_openai) return _openai;
+  const key = env.OPENAI_API_KEY;
+  if (!key || key === 'your-openai-api-key' || key.startsWith('sk-placeholder')) return null;
+  _openai = new OpenAI({ apiKey: key });
+  return _openai;
+}
 
 interface ResumeData {
   name: string;
@@ -75,7 +83,13 @@ Respond in JSON format:
   "atsScore": <0-100>
 }`;
 
-    const completion = await openai.chat.completions.create({
+    const client = getOpenAI();
+    if (!client) {
+      logger.warn('OpenAI not configured — resume AI features disabled');
+      return { suggestions: [], score: 0 } as any;
+    }
+
+    const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.4,
       max_tokens: 1500,
@@ -132,7 +146,13 @@ Respond in JSON:
   "customSummary": "A tailored professional summary for this specific job"
 }`;
 
-    const completion = await openai.chat.completions.create({
+    const client = getOpenAI();
+    if (!client) {
+      logger.warn('OpenAI not configured — resume AI features disabled');
+      return { suggestions: [], score: 0 } as any;
+    }
+
+    const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.4,
       max_tokens: 1500,
@@ -160,7 +180,13 @@ Respond in JSON:
    * Generate a professional summary tailored for diaspora professionals.
    */
   async generateSummary(resume: ResumeData): Promise<string> {
-    const completion = await openai.chat.completions.create({
+    const client = getOpenAI();
+    if (!client) {
+      logger.warn('OpenAI not configured — resume AI features disabled');
+      return { suggestions: [], score: 0 } as any;
+    }
+
+    const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.6,
       max_tokens: 300,
@@ -200,7 +226,13 @@ Respond in JSON:
     const targetSkills = applications.flatMap((app) => app.job.skills);
     const uniqueTargetSkills = [...new Set(targetSkills)];
 
-    const completion = await openai.chat.completions.create({
+    const client = getOpenAI();
+    if (!client) {
+      logger.warn('OpenAI not configured — resume AI features disabled');
+      return { suggestions: [], score: 0 } as any;
+    }
+
+    const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.4,
       max_tokens: 800,
