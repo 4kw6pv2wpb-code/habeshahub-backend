@@ -286,9 +286,9 @@ async function aggregateDailyAnalytics(): Promise<void> {
       db.post.count({ where: { createdAt: { gte: today, lt: tomorrow } } }),
       db.video.count({ where: { createdAt: { gte: today, lt: tomorrow } } }),
       db.walletTransaction.count({ where: { createdAt: { gte: today, lt: tomorrow }, status: 'COMPLETED' } }),
-      db.jobPosting.count({ where: { createdAt: { gte: today, lt: tomorrow } } }),
+      db.job.count({ where: { createdAt: { gte: today, lt: tomorrow } } }),
       db.liveStream.count({ where: { startedAt: { gte: today, lt: tomorrow } } }),
-      db.moderationQueue.count({ where: { createdAt: { gte: today, lt: tomorrow } } }),
+      db.userReport.count({ where: { createdAt: { gte: today, lt: tomorrow } } }),
     ]);
 
     const snapshot = {
